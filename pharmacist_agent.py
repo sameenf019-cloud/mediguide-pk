@@ -94,8 +94,10 @@ STRICT RULES:
 - Agar tool result mein 'closest_matches' ho: likho "Exact match nahi mila" aur qareebi naam dikhao, aur kaho ke doctor ya pharmacist se confirm karein. Is dawa ko verified mat samjho aur interaction check mein shamil mat karo.
 - Agar koi dawa 'unverified' ho to uske samne "غیر تصدیق شدہ" likho aur us ke liye aage kuch mat likho.
 - 'closest_matches' ka matlab ye NAHI ke wohi dawa hai. Report mein saaf likho ke qareebi naam alag dawa bhi ho sakta hai, is liye isay parchi wali dawa mat samjho.
+- Closest match ke liye ye jumla bilkul isi tarah likho: "ہو سکتا ہے یہ وہی دوا نہ ہو، اس لیے ڈاکٹر یا فارماسسٹ سے تصدیق کریں۔" Apni taraf se is ka matlab mat badlo.
 - Agar koi dawa closest_matches ya unverified mein ho to report mein saaf likho ke interaction check mukammal nahi hai.
-- Agar find_affordable_generics ka 'price_comparison' false ho to "sasti" mat likho. Sirf "same formula wali dawaiyan (database ke mutabiq)" likho.
+- Agar find_affordable_generics ka 'price_comparison' false ho to سستا، سستی، سستے (sasta/sasti/saste) kisi bhi shakal mein mat likho, heading mein bhi nahi. Heading ye likho: "اسی فارمولے والی دوائیں (ڈیٹا بیس کے مطابق)".
+- Agar tool ne manufacturer nahi diya (None) to manufacturer ka column hi mat banao. "دیتا نہیں" jaise alfaz mat likho.
 - Agar interactions khali hon to "safe" mat likho. Likho: "hamare database mein koi interaction nahi mila, ye safe hone ka saboot nahi."
 - Agar verified dawa ka 'match_type' 'name_match' ho aur parchi par strength likhi ho, to report mein saaf likho ke parchi ki strength database mein nahi mili ya confirm karni hai, aur database wali strength bhi likho.
 - Manufacturer, company ya brand tab hi likho jab tool ne diya ho. Warna kuch mat likho.
@@ -142,6 +144,23 @@ def run_tool(func_name, args):
         return {"error": f"Tool failed: {e}"}
 
 
+def clean_report(text, price_compared):
+    """Model ki aam ghaltiyan code se theek karta hai (prompt par poora bharosa nahi)."""
+    if not text:
+        return text
+    fixes = {
+        "یہ ضرور اسی دوا نہیں ہو سکتی": "ہو سکتا ہے یہ وہی دوا نہ ہو",
+        "(دیتا نہیں)": "—",
+    }
+    if not price_compared:
+        # Qeemat ka muazna nahi hua, to "sasta" heading nahi chalegi
+        for bad in ("سستے متبادل", "سستی متبادل", "سستا متبادل"):
+            fixes[bad] = "اسی فارمولے والی دوائیں"
+    for old, new in fixes.items():
+        text = text.replace(old, new)
+    return text
+
+
 # ------------------------------------------------------------------
 # MAIN AGENT
 # ------------------------------------------------------------------
@@ -154,6 +173,7 @@ def run_pharmacist_agent(ocr_text):
     ]
 
     final_text = None
+    price_compared = False
 
     # Agent loop: max 5 steps
     for step in range(5):
@@ -184,6 +204,9 @@ def run_pharmacist_agent(ocr_text):
 
             print(f"🛠️ Agent Tool Call: {func_name} ...")
             result = run_tool(func_name, args)
+            if (func_name == "find_affordable_generics"
+                    and isinstance(result, dict) and result.get("price_comparison")):
+                price_compared = True
             print(f"   ↳ Result: {str(result)[:300]}")  # debugging
 
             messages.append({
@@ -202,7 +225,7 @@ def run_pharmacist_agent(ocr_text):
         )
         final_text = final_response.choices[0].message.content
 
-    return final_text
+    return clean_report(final_text, price_compared)
 
 
 if __name__ == "__main__":
