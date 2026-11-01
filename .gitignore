@@ -1,0 +1,6 @@
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.jpg
+*.png
+*.jpegpakistan_medicines_5k.csv
